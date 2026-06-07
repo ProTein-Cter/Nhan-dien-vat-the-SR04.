@@ -1,0 +1,110 @@
+#include <WiFi.h>
+#include <PubSubClient.h>
+#include <ESP32Servo.h>
+
+// --- 1. CẤU HÌNH MẠNG & MQTT ---
+const char* ssid = "T";        
+const char* password = "t1234569.";      
+const char* mqtt_server = "10.38.159.239";      
+
+const char* mqtt_topic = "sr04/radar/data";    
+
+WiFiClient espClient;
+PubSubClient client(espClient);
+
+// --- 2. CẤU HÌNH PHẦN CỨNG (Giữ nguyên chân cắm cũ của cậu) ---
+const int trigPin = 5;
+const int echoPin = 18;
+const int servoPin = 13;
+
+Servo radarServo; // ESP32 phải dùng class này
+int pos = 0;    
+float duration, distance;
+
+void setup_wifi() {
+  delay(10);
+  Serial.println("\nĐang kết nối WiFi...");
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(500);
+    Serial.print(".");
+  }
+  Serial.println("\n✅ WiFi OK!");
+}
+
+void reconnect() {
+  while (!client.connected()) {
+    Serial.print("Đang kết nối MQTT... ");
+    String clientId = "ESP32_Radar_" + String(random(0xffff), HEX);
+    if (client.connect(clientId.c_str())) {
+      Serial.println("✅ Đã kết nối MQTT!");
+    } else {
+      delay(5000);
+    }
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  Serial.println("Radar Start");
+  
+  pinMode(trigPin, OUTPUT);
+  pinMode(echoPin, INPUT);
+  
+  radarServo.setPeriodHertz(50); 
+  radarServo.attach(servoPin, 500, 2400); 
+
+  setup_wifi();
+  client.setServer(mqtt_server, 1883);
+}
+
+// HÀM TÍNH KHOẢNG CÁCH GỌN NHẸ TỪ CODE CỦA CẬU
+void dist_calc(int current_pos) {
+  // Bắn xung 40kHz
+  digitalWrite(trigPin, LOW);
+  delayMicroseconds(2);
+  digitalWrite(trigPin, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigPin, LOW);
+  
+  // Tớ thêm số 30000 (30ms) vào làm Timeout để chống treo mạch khi không có vật cản
+  duration = pulseIn(echoPin, HIGH, 30000); 
+  
+  if (duration == 0) {
+    distance = 400.0; // Nếu quá thời gian không thấy sóng dội về, gán max 400cm
+  } else {
+    // Công thức tính khoảng cách chuẩn theo vận tốc âm thanh (343 m/s)
+    distance = 100.0 * (343.0 * (duration / 2.0)) / 1000000.0; 
+    if (distance > 400.0) distance = 400.0; // Giới hạn kịch trần 400cm để chống nhiễu đồ họa
+  }
+ 
+  // Đóng gói dữ liệu định dạng: "Góc,Khoảng_cách"
+  String payload = String(current_pos) + "," + String(distance, 1);
+  
+  // In ra màn hình Serial Monitor
+  Serial.println(payload); 
+  
+  // Bắn thẳng lên MQTT cho Python vẽ hình
+  client.publish(mqtt_topic, payload.c_str());
+}
+
+void loop() {
+  if (!client.connected()) {
+    reconnect();
+  }
+  client.loop(); 
+
+  // QUÉT THUẬN (0 -> 180)
+  for (pos = 0; pos <= 180; pos += 1) { 
+    radarServo.write(pos);              
+    delay(60); // Delay 60ms giúp Servo quay cực kỳ từ tốn và êm ái
+    dist_calc(pos);
+  }
+ 
+  // QUÉT NGHỊCH (180 -> 0)
+  for (pos = 180; pos >= 0; pos -= 1) { 
+    radarServo.write(pos);              
+    delay(60);
+    dist_calc(pos);
+  }
+}
