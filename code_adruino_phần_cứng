@@ -12,7 +12,7 @@ const char* mqtt_topic = "sr04/radar/data";
 WiFiClient espClient;
 PubSubClient client(espClient);
 
-// --- 2. CẤU HÌNH PHẦN CỨNG (Giữ nguyên chân cắm cũ của cậu) ---
+// --- 2. CẤU HÌNH PHẦN CỨNG 
 const int trigPin = 5;
 const int echoPin = 18;
 const int servoPin = 13;
@@ -29,7 +29,7 @@ void setup_wifi() {
     delay(500);
     Serial.print(".");
   }
-  Serial.println("\n✅ WiFi OK!");
+  Serial.println();
 }
 
 void reconnect() {
@@ -37,7 +37,7 @@ void reconnect() {
     Serial.print("Đang kết nối MQTT... ");
     String clientId = "ESP32_Radar_" + String(random(0xffff), HEX);
     if (client.connect(clientId.c_str())) {
-      Serial.println("✅ Đã kết nối MQTT!");
+      Serial.println();
     } else {
       delay(5000);
     }
@@ -58,7 +58,7 @@ void setup() {
   client.setServer(mqtt_server, 1883);
 }
 
-// HÀM TÍNH KHOẢNG CÁCH GỌN NHẸ TỪ CODE CỦA CẬU
+
 void dist_calc(int current_pos) {
   // Bắn xung 40kHz
   digitalWrite(trigPin, LOW);
@@ -67,7 +67,7 @@ void dist_calc(int current_pos) {
   delayMicroseconds(10);
   digitalWrite(trigPin, LOW);
   
-  // Tớ thêm số 30000 (30ms) vào làm Timeout để chống treo mạch khi không có vật cản
+ 
   duration = pulseIn(echoPin, HIGH, 30000); 
   
   if (duration == 0) {
